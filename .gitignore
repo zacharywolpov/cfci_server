@@ -1,0 +1,67 @@
+# ----------------------------------------
+# Python
+# ----------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environment
+venv/
+.env/
+.env.*
+.venv/
+
+# Byte-compiled / cache
+.python-version
+*.cache
+*.pytest_cache/
+
+# ----------------------------------------
+# FastAPI / Uvicorn
+# ----------------------------------------
+*.log
+
+# ----------------------------------------
+# VSCode
+# ----------------------------------------
+.vscode/
+.history/
+
+# ----------------------------------------
+# OS-specific
+# ----------------------------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------------------------
+# Alembic
+# ----------------------------------------
+alembic/__pycache__/
+alembic/versions/__pycache__/
+
+# IMPORTANT:
+# Do NOT ignore alembic/versions/ itself
+# You WANT the migration files committed
+
+# Ignore SQLite files if using sqlite
+*.sqlite
+*.db
+
+# ----------------------------------------
+# Environment & Secrets
+# ----------------------------------------
+*.env
+.env.local
+.env.development
+.env.development.local
+.env.production
+.env.test
+*.pem
+secrets.json
+
+# ----------------------------------------
+# PyCharm
+# ----------------------------------------
+.idea/
