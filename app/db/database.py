@@ -6,7 +6,10 @@ from app.core.config import get_settings
 # Creates the SQLAlchemy engine and session
 settings = get_settings()
 postgres_url = settings.postgres_url
-engine = create_engine(postgres_url)
+engine = create_engine(
+    postgres_url,
+    pool_pre_ping=True
+)
 
 # Creates a configured "Session" class, allowing
 # us to use this session for database operations
