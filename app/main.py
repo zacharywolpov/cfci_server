@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.services import openai_service
-from app.api import chat, auth, admin
+from app.api import chat, auth
 from dotenv import load_dotenv
 from app.core import config
 import os
