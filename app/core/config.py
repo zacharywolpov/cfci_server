@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     # Keys and auth
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY")
 
+    # Client origins
+    CORS_ORIGINS: str = ""
+
     # API settings and keys
     openai_key: str
     airtable_api_key: str
@@ -25,6 +28,13 @@ class Settings(BaseSettings):
         ),
         "env_file_encoding": "utf-8",
     }
+
+    # Cors origin list
+    @property
+    def cors_origin_list(self):
+        if not self.CORS_ORIGINS:
+            return []
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
 
 @lru_cache
