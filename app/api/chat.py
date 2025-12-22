@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 from fastapi.security import HTTPBearer
 from app.core.dependencies import settings_dependency, openai_service_dependency, db_dependency, user_dependency
 from app.db.models.field_submission import FieldSubmission
+from app.db.models.form import Form
 from app.db.models.message import Message
 from app.db.models.conversation import Conversation
 from app.schemas.chat_schemas import InitiateChatResponse, AdvanceChatRequest, AdvanceChatResponse
@@ -35,10 +36,23 @@ async def initiate_chat(
     init_message = """Hi! I'm an AI assistant here to help you with your questions about the Christenson
 Family Center for Innovation. How can I assist you today?"""
     try:
+        # Create new form record and link to conversation
+        # IMPORTANT: Hard-coding form_template record with ID 1
+        db_form = Form(
+            user_id=user.id,
+            form_template_id=1
+        )
+        db.add(db_form)
+        db.commit()
+        db.refresh(db_form)
+
+        # Create new conv record
         db_conv = Conversation(
             title=f"CFCI x {user.firstname} {user.lastname} Chat",
-            user_id=user.id
+            user_id=user.id,
+            form_id=db_form.id
         )
+
         db.add(db_conv)
         db.commit()
         db.refresh(db_conv)
@@ -47,31 +61,37 @@ Family Center for Innovation. How can I assist you today?"""
         logger.error(f"Error creating conversation for user {user.id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to create conversation.")
 
-    try:
-        db_message = Message(
-            sender="agent",
-            message_num=0,
-            content=init_message,
-            user_id=user.id,
-            conversation_id=db_conv.id
-        )
-        db.add(db_message)
-        db.commit()
-        db.refresh(db_message)
-        logger.info(f"Initial message added to conversation {db_conv.id} with message num {db_message.message_num} and system ID {db_message.id}.")
-    except Exception as e:
-        logger.error(f"Error creating initial message for conversation {db_conv.id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create initial message.")
+    # # Create initial message from agent
+    # try:
+    #     db_message = Message(
+    #         sender="agent",
+    #         message_num=0,
+    #         content=init_message,
+    #         user_id=user.id,
+    #         conversation_id=db_conv.id
+    #     )
+    #     db.add(db_message)
+    #     db.commit()
+    #     db.refresh(db_message)
+    #     logger.info(f"Initial message added to conversation {db_conv.id} with message num {db_message.message_num} and system ID {db_message.id}.")
+    # except Exception as e:
+    #     logger.error(f"Error creating initial message for conversation {db_conv.id}: {e}")
+    #     raise HTTPException(status_code=500, detail="Failed to create initial message.")
 
     """
     2. Return response with conversation and message details.
     """
+    # response = InitiateChatResponse(
+    #     conversation_id=db_conv.id,
+    #     form_id=db_form.id,
+    #     message_id=db_message.id,
+    #     message_num=db_message.message_num,
+    #     sender=db_message.sender,
+    #     content=db_message.content
+    # )
     response = InitiateChatResponse(
         conversation_id=db_conv.id,
-        message_id=db_message.id,
-        message_num=db_message.message_num,
-        sender=db_message.sender,
-        content=db_message.content
+        form_id=db_form.id
     )
 
     return response
@@ -116,7 +136,7 @@ async def advance_chat(
     try:
         user_message = Message(
             sender="user",
-            message_num=len(payload.message_step_num + 1),
+            message_num=payload.message_step_num,
             content=payload.user_message,
             user_id=user.id,
             conversation_id=conv.id
@@ -153,15 +173,25 @@ async def advance_chat(
     """
     try:
         form = conv.form
-        form_template = form.form_template  
-        field_templates = form_template.field_templates
-        field_submissions = [fs for fs in form.field_submissions]
+        if not form:
+            logger.warning(f"No form associated with conversation {conv.id}.")
+
+        form_template = form.form_template if form else None
+        if form_template == None:
+            logger.warning(f"No form template associated with form {form.id if form else None} in conversation {conv.id}.")
+
+        field_templates = form_template.field_templates if form_template else []
+        if len(field_templates) == 0:
+            logger.warning(f"No field templates associated with form template {form_template.id if form_template else None} in conversation {conv.id}.")
+
+        field_submissions = [fs for fs in form.field_submissions] if form else []
 
         form_context: str = "### LATEST STATE OF THE FORM\n\n"
 
         for field_template in field_templates:
             submission = next((fs for fs in field_submissions if fs.field_template_id == field_template.id), None)
-            form_context += f"Field name: {field_template.field_name}\n"
+            form_context += f"Field name: {field_template.name}\n"
+            form_context += f"Template field ID: {field_template.id}\n"
             form_context += f"Field data type: {field_template.field_type}\n"
             form_context += f"Field instructions: {field_template.description}\n"
             form_context += f"Current value: {submission.value if submission else 'NONE'}\n"
@@ -216,13 +246,18 @@ async def advance_chat(
         full_prompt = full_prompt.replace("{{CHAT_HISTORY}}", chat_history)
         logger.info(f"Successfully loaded and filled update_form prompt for conversation {conv.id}.")
 
+        logger.info(f"FULL PROMPT LLM CALL 1: {full_prompt}")
+
         # Call LLM to get fields to update
         logger.info(f"LLM CALL 1 - calling LLM to update form for conversation {conv.id}.")
         llm_response = openai_service.handle_message(
+            system_prompt=None,
             user_prompt=full_prompt,
             response_format=UpdateFormLLMOutput
-        )
+        ).get("response")
         logger.info(f"LLM CALL 1 - received response from LLM to update form for conversation {conv.id}.")
+
+        logger.info(f"LLM CALL 1 RESPONSE: {llm_response}")
 
     except Exception as e:
         logger.error(f"Fatal error during LLM call to update form for conversation {conv.id}: {e}")
@@ -268,12 +303,12 @@ async def advance_chat(
     """
     # Rebuild form context after updates
     try:
-        field_submissions = [fs for fs in form.field_submissions]  # Reload submissions
+        field_submissions = [fs for fs in form.field_submissions] if form else [] # Reload submissions
         form_context: str = "### LATEST STATE OF THE FORM\n\n"
 
         for field_template in field_templates:
             submission = next((fs for fs in field_submissions if fs.field_template_id == field_template.id), None)
-            form_context += f"Field name: {field_template.field_name}\n"
+            form_context += f"Field name: {field_template.name}\n"
             form_context += f"Field data type: {field_template.field_type}\n"
             form_context += f"Field instructions: {field_template.description}\n"
             form_context += f"Current value: {submission.value if submission else 'NONE'}\n"
@@ -295,14 +330,16 @@ async def advance_chat(
             role = "User" if msg.sender == "user" else "Agent"
             chat_history += f"{role}: {msg.content}\n"
         full_prompt = full_prompt.replace("{{CHAT_HISTORY}}", chat_history)
+        full_prompt = full_prompt.replace("{{LATEST_MESSAGE}}", user_message.content)
         logger.info(f"Successfully loaded and filled generate_response prompt for conversation {conv.id}.")
 
         # Call LLM to get agent's next message
         logger.info(f"LLM CALL 2 - calling LLM to generate agent response for conversation {conv.id}.")
         llm_response = openai_service.handle_message(
+            system_prompt=None,
             user_prompt=full_prompt,
             response_format=DefaultLLMOutput
-        )
+        ).get("response")
         logger.info(f"LLM CALL 2 - received response from LLM to generate agent response for conversation {conv.id}.")
     except Exception as e:
         logger.error(f"Fatal error during LLM call to generate agent response for conversation {conv.id}: {e}")
