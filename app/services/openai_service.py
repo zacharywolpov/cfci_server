@@ -13,7 +13,7 @@ class OpenAIService:
     def __init__(self, api_key: str):
         self.client = OpenAI(api_key=api_key)
 
-    def handle_message(self, system_prompt: str, user_prompt: str, response_format: type[BaseModel] = openai_schemas.DefaultLLMOutput):
+    def handle_message(self, user_prompt: str, response_format: type[BaseModel] = openai_schemas.DefaultLLMOutput, system_prompt: str = ""):
         response = self.client.responses.parse(
             model="gpt-4o",
             input=[

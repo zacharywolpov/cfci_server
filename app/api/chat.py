@@ -251,9 +251,9 @@ async def advance_chat(
         # Call LLM to get fields to update
         logger.info(f"LLM CALL 1 - calling LLM to update form for conversation {conv.id}.")
         llm_response = openai_service.handle_message(
-            system_prompt=None,
             user_prompt=full_prompt,
-            response_format=UpdateFormLLMOutput
+            response_format=UpdateFormLLMOutput,
+            system_prompt=""
         ).get("response")
         logger.info(f"LLM CALL 1 - received response from LLM to update form for conversation {conv.id}.")
 
@@ -336,9 +336,9 @@ async def advance_chat(
         # Call LLM to get agent's next message
         logger.info(f"LLM CALL 2 - calling LLM to generate agent response for conversation {conv.id}.")
         llm_response = openai_service.handle_message(
-            system_prompt=None,
             user_prompt=full_prompt,
-            response_format=DefaultLLMOutput
+            response_format=DefaultLLMOutput,
+            system_prompt=""
         ).get("response")
         logger.info(f"LLM CALL 2 - received response from LLM to generate agent response for conversation {conv.id}.")
     except Exception as e:
