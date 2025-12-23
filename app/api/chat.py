@@ -234,6 +234,7 @@ async def advance_chat(
         # Load prompt template, fill in with form context
         prompt_template = read_markdown_file("app/prompts/update_form.md")
         full_prompt = prompt_template.replace("{{FORM_CONTEXT}}", form_context)
+        chat_history = ""
 
         # Fill in prompt with previous 10 messages in the conv (load
         # 20 for later usage)
