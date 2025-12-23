@@ -236,11 +236,19 @@ async def advance_chat(
         full_prompt = prompt_template.replace("{{FORM_CONTEXT}}", form_context)
 
         # Fill in prompt with previous 10 messages in the conv (load
-        # 30 for later usage)
-        recent_messages = db.query(Message).filter(Message.conversation_id == conv.id).order_by(Message.message_num.desc()).limit(20).all()
-        recent_messages.reverse()  # So they are in chronological order
-        chat_history = ""
-        for msg in recent_messages[:10]:
+        # 20 for later usage)
+        recent_messages = (
+            db.query(Message)
+            .filter(Message.conversation_id == conv.id)
+            .order_by(Message.message_num.desc())
+            .limit(20)
+            .all()
+        )
+        recent_messages.reverse() # So oldest messages first
+
+        recent_messages_llm1 = recent_messages[-10:]  # Last 10 messages for LLM 1
+
+        for msg in recent_messages_llm1:
             role = "User" if msg.sender == "user" else "Agent"
             chat_history += f"{role}: {msg.content}\n"
         full_prompt = full_prompt.replace("{{CHAT_HISTORY}}", chat_history)
