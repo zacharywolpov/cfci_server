@@ -123,7 +123,7 @@ async def create_form_template(db = db_dependency):
 	return {"id": form_template.id}
 
 # ******NEEDS UPDATING******
-@router.get("/form_templates")
+@router.get("/form_templates/{form_template_id}")
 async def get_form_template(form_template_id: int, db = db_dependency):
 	"""
 	Get a form_template by ID.
@@ -133,7 +133,21 @@ async def get_form_template(form_template_id: int, db = db_dependency):
 	if not form_template:
 		logger.warning(f"Form template with id {form_template_id} not found.")
 		raise HTTPException(status_code=404, detail="Form not found.")
-	return
+	return {
+		"id": form_template.id,
+		"created_at": form_template.created_at,
+		"updated_at": form_template.updated_at,
+		"field_templates": [
+			{
+				"id": ft.id,
+				"name": ft.name,
+				"field_type": ft.field_type,
+				"description": ft.description,
+				"created_at": ft.created_at,
+				"updated_at": ft.updated_at
+			} for ft in form_template.field_templates
+		]
+	}
 
 @router.post("/field_templates")
 async def create_field_template(
@@ -164,3 +178,15 @@ async def create_field_template(
 	db.refresh(field_template)
 	logger.info(f"Created field_template with id {field_template.id} for form_template_id {form_template_id}.")
 	return {"id": field_template.id}
+
+@router.delete("/field_templates/{field_template_id}")
+async def delete_field_template(field_template_id: int, db = db_dependency):
+	logger.info(f"Admin requested deletion of field_template with id {field_template_id}.")
+	field_template = db.query(FieldTemplate).filter(FieldTemplate.id == field_template_id).first()
+	if not field_template:
+		logger.warning(f"FieldTemplate with id {field_template_id} not found.")
+		raise HTTPException(status_code=404, detail="FieldTemplate not found.")
+	db.delete(field_template)
+	db.commit()
+	logger.info(f"Deleted field_template with id {field_template_id}.")
+	return {"detail": "FieldTemplate deleted successfully.", "id": field_template_id}
